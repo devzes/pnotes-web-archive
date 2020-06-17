@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <!-- Meta tags and title -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pnotes</title>
+
+    <link rel="icon" href="article-24px.svg" type="image/svg+xml">
+    <link rel="shortcut icon" href="article-24px.svg" type="image/svg+xml">
+
+    <!-- Firebase Scripts, currently using app, auth and database for right now! -->
+    <!-- update the version number as needed -->
+    <script defer src="/__/firebase/7.14.4/firebase-app.js"></script>
+    <!-- include only the Firebase features as you need -->
+    <script defer src="/__/firebase/7.14.4/firebase-auth.js"></script>
+    <script defer src="/__/firebase/7.14.4/firebase-database.js"></script>
+    <!-- <script defer src="/__/firebase/7.14.4/firebase-messaging.js"></script> -->
+    <!-- <script defer src="/__/firebase/7.14.4/firebase-storage.js"></script> -->
+    <!-- initialize the SDK after all desired features are loaded -->
+    <script defer src="/__/firebase/init.js"></script>
+    <script src="https://cdn.jsdelivr.net/remarkable/1.7.1/remarkable.min.js"></script>
+
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="/css/desktop-style.css">
+
+    <!-- Latest compiled and minified CSS -->
+    <!-- <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous"> -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  
+    <!-- <link href = "https://code.jquery.com/ui/1.10.4/themes/ui-lightness/jquery-ui.css" rel = "stylesheet"> -->
+    <script src = "https://code.jquery.com/jquery-1.10.2.js"></script>
+    <script src = "https://code.jquery.com/ui/1.10.4/jquery-ui.js"></script>
+
+    <!-- Highlight js-->
+    <script src="https://cdn.jsdelivr.net/highlight.js/8.4.0/highlight.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/highlight.js/8.4.0/styles/solarized_light.min.css">
+    <script>hljs.initHighlightingOnLoad();</script>
+  </head>
+  <body  class="<%= theme %>">
+    
+    <!-- Script Just After Body -->
+    <script>
+      var md = new Remarkable();
+      document.addEventListener('DOMContentLoaded', function () {
+
+          window.signInEmail = '<%= userEmail %>';
+          const signInUserEmail = '<%= userEmail %>';
+          window.currentNote = '';
+          window.editor = { id: '', title: '', description: '' };
+
+          console.log(signInUserEmail);
+
+          // Now call the data extract for only once so as to get the list of datas
+          firebase.database().ref(signInUserEmail).orderByChild('timestamp').on('value', function (snapshot) {
+
+              //console.log(snapshot);
+              var descNoteList = [];
+
+              snapshot.forEach(function (childSnapshot) {
+                  var childKey = childSnapshot.key;
+                  var childData = childSnapshot.val();
+                  //console.log("childkey", childKey);
+                  //console.log("childData", childData);
+                  // ...
+                  descNoteList.push({ childKey: childKey, childData: childData });
+
+              });
+
+              // Reverse the array
+              descNoteList.reverse();
+
+              // Empty the notes data
+              window.notesData = {};
+
+              var noteFamily = document.getElementById('note-family');
+              noteFamily.innerHTML = '';
+              noteFamilyString = '';
+
+              descNoteList.forEach(function (childSnapshot) {
+                  var childKey = childSnapshot.childKey;
+                  var childData = childSnapshot.childData;
+
+                  noteFamilyString += '<div id="' + childKey + '" class="note-row hoverable" onclick=doOnNoteClick(this) >'
+                      + '<div class="note-title">' + childData.title + '</div>'
+                      + '<div class="note-date">' + childData.date + '</div>'
+                      + '</div>';
+
+                  // Only storing notes description in it
+                  window.notesData[childKey] = { description: childData.description, title: childData.title };
+              });
+
+              noteFamily.innerHTML = noteFamilyString;
+
+              // make the current note active if present
+              if (window.currentNote) {
+                try{
+                  document.getElementById(window.currentNote).classList.add('is--active');
+                  document.getElementById(window.currentNote).classList.remove('hoverable');
+                } catch(e) {
+                  console.log("Ignore this error, comes at time of delete",e.toString)
+                }
+              }
+          });
+
+          //list(family);
+
+          // Here the firebase is correctly defined purely!
+          //console.log(firebase.database.ServerValue.TIMESTAMP);
+
+          addNotefunction = (title, description) => {
+              //Start the add note function
+              console.log("Add Note");
+
+              var options = { month: 'short', day: 'numeric' };
+              var today = new Date();
+              // console.log(today.toLocaleDateString("en-US", options));
+
+              var newNote = {
+                  title: title,
+                  description: description,
+                  date: today.toLocaleDateString("en-US", options),
+                  timestamp: firebase.database.ServerValue.TIMESTAMP
+              }
+
+              // Get a key for a new Post.
+              var newPostKey = firebase.database().ref(signInUserEmail).push().key;
+
+              console.log(newPostKey);
+              // Now this is going to be the current value which we are editing
+              window.currentNote = newPostKey;
+
+              // Write the new post's data simultaneously in the posts list and the user's post list.
+              var updates = {};
+              updates[newPostKey] = newNote;
+
+              return firebase.database().ref(signInUserEmail).update(updates);
+          }
+
+          updateNotefunction = (noteId, title, description) => {
+
+              //Start the update note function
+              console.log("Update Note");
+
+              var options = { month: 'short', day: 'numeric' };
+              var today = new Date();
+              // console.log(today.toLocaleDateString("en-US", options));
+
+              var newNote = {
+                  title: title,
+                  description: description,
+                  date: today.toLocaleDateString("en-US", options),
+                  timestamp: firebase.database.ServerValue.TIMESTAMP
+              }
+
+              // Write the new post's data simultaneously in the posts list and the user's post list.
+              var updates = {};
+              updates[noteId] = newNote;
+
+              return firebase.database().ref(signInUserEmail).update(updates);
+          }
+
+          deleteNotefunction = (noteId) => {
+              return firebase.database().ref(signInUserEmail).child(noteId).remove();
+          }
+      });
+
+    </script>
+
+    <!-- Script for sign out -->
+    <script>
+      // Sign out Function
+      signOutFromGoogle = () => {
+          //Start the user delete or sign out activity
+          console.log("Sign Out User!");
+
+          var user = firebase.auth().signOut();
+
+          var xhttp = new XMLHttpRequest();
+
+          xhttp.addEventListener("error", function (evt) {
+              console.log("Failed");
+              console.log(evt.toString());
+          });
+
+          xhttp.addEventListener("load", function (evt) {
+              console.log("Sign Out Success!");
+              location.reload();
+          });
+
+          // Defining parameters 
+          xhttp.open("POST", "/clear", true);
+          //Send the proper header information along with the request
+          xhttp.setRequestHeader("Content-Type", "application/json"); // Necessary for POST
+          xhttp.send();
+      }
+
+    </script>
+
+    <div id="main">
+      <div id="top-nav">
+        <% if(theme === 'dark') { %>  
+          <div id="logo-header"><img src="pnotes-logo-dark.png"></img></div>
+        <% } else { %>
+          <div id="logo-header"><img src="pnotes-logo3.png"></img></div>
+        <% } %>
+        <button class="btn" id="create-note-button" onclick=newNoteWindow()>Add Note</button>
+        <div id="edit-title-button-div">
+          <button class="btn btn-primary hidden" id="edit-title-button" onclick=makeEditTitleBoxVisible()>Edit Title</button>
+          <div id="edit-note-title-box" class="hidden">
+            <h3>Edit Note Title</h3>
+            <input id="edit-note-title-input" value="" placeholder="Enter Note Title">
+            <div class="buttons" style="display: flex;">
+              <button class="btn cancel">Cancel</button>
+              <button class="btn btn-primary save" style="margin-left: auto;">Done</button>
+            </div>
+          </div>
+        </div>
+        <button class="btn btn-danger hidden" id="remove-note-button" onclick=openDeleteNoteModal()>Delete Note</button>
+        <div class="right-menu">
+          <!-- replace with icon -->
+          <% if(theme === 'dark') { %>
+            <button id="dark-switcher" class="btn btn-primary">Switch to Light mode</button>
+          <% } else { %>
+            <button id="dark-switcher" class="btn btn-primary">Switch to Dark mode</button>
+          <% } %>
+          <div id="user-email-heading">Welcome <%= userEmail %></div>
+          <button class="btn btn-danger" id="sign-out-button" onclick=signOutFromGoogle()>Sign Out</button>
+        </div>
+      </div>
+
+      <!-- Main content contains the title and description -->
+      <div id="main-content">
+        <div id="sidebar">
+          <div id="search-notes-box-container">
+            <div id="search-notes-box">
+              <span class="search-icon"><i class="fa fa-search"></i></span>
+              <div class="search-input-container"><input id="search-input" placeholder="Search Notes" value=""></div>
+            </div>
+          </div>
+          <div id="note-family">
+            <div id="startup">
+              <div class="lds-ellipsis"><div></div><div></div><div></div><div></div></div>
+            </div>
+          </div>
+        </div>
+        <div id="main-content-main">
+          <div id="tab-nav" class="hidden">
+            <div id="preview-button" class="tab">Preview</div>
+            <div id="editing-button" class="tab">Edit</div>
+            <div id="right-tab-menu">
+              <button id="cancel-button" class="btn" onclick=restoreState()>Cancel</button>
+              <button id="save-button" class="btn btn-primary" onclick=saveNote()>Save</button>
+            </div>
+          </div>
+          <div id="note-description-content">
+            <div id="welcome-message">
+              <h1>Welcome</h1>
+              <p>Start by selecting a Note from the sidebar or create a new Note 😀!</p>
+            </div>
+          </div>
+          <div id="note-description-preview" class="hidden">
+            <textarea id="note-description-editor" oninput=changeWindowEditorDescription(this) placeholder="Add Note description here.."></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- The delete Modal -->
+    <div id="delete-modal" class="modal hidden" style="padding-top: 200px;">
+    
+      <!-- Modal content -->
+      <div class="modal-content" style="max-width: 400px;">
+        <!-- Heading and close button -->
+        <span class="close">&times;</span>
+        <h3 style="margin-top: 5px !important;">Delete Note Warning</h3>
+        <p id="modal-message-p">Are You Sure You want to Delete this Note?<p>
+        <hr>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary cancel">Close</button>
+          <button type="button" class="btn btn-primary confirm-delete">Delete Note</button>
+        </div>
+      </div>
+    </div>
+    
+    <script src="js/newdesign-before-body.js"></script>
+    <!-- JQuery for resize -->
+    <script src="js/before-body-jquery.js"></script>
+  </body>
+</html>
